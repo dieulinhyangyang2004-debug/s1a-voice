@@ -1,0 +1,239 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+  <title>Trợ lý kế toán AI</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f9;
+      padding: 20px;
+      color: #17365d;
+    }
+
+    .card {
+      max-width: 480px;
+      margin: 30px auto;
+      padding: 25px;
+      background: white;
+      border-radius: 18px;
+      text-align: center;
+      box-shadow: 0 4px 20px #0001;
+    }
+
+    button {
+      border: none;
+      cursor: pointer;
+      padding: 13px 20px;
+      border-radius: 10px;
+      margin: 8px;
+      font-size: 15px;
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: default;
+    }
+
+    .mic {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: #17365d;
+      color: white;
+      font-size: 36px;
+    }
+
+    .listening {
+      background: #dc3545;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      50% {
+        box-shadow: 0 0 0 15px #dc354533;
+      }
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      padding: 12px;
+      border: 1px solid #ccd3dc;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    .send {
+      background: #198754;
+      color: white;
+    }
+
+    #status {
+      margin: 20px 0;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="card">
+
+  <h2>Trợ lý kế toán AI</h2>
+
+  <p>Nhấn micro và nói nội dung doanh thu</p>
+
+  <button class="mic"
+          id="mic"
+          onclick="startVoice()">
+    🎙️
+  </button>
+
+  <div id="status">
+    Sẵn sàng lắng nghe
+  </div>
+
+  <textarea id="transcript"
+    placeholder="Nội dung giọng nói sẽ xuất hiện ở đây">
+  </textarea>
+
+  <button onclick="stopVoice()">
+    Dừng nghe
+  </button>
+
+  <button class="send"
+          onclick="sendResult()">
+    Gửi về sổ kế toán
+  </button>
+
+</div>
+
+<script>
+
+const $ = id => document.getElementById(id);
+
+const params = new URLSearchParams(
+  location.hash.slice(1)
+);
+
+const parentOrigin = params.get('origin');
+const nonce = params.get('nonce');
+
+let recognition = null;
+let listening = false;
+
+function startVoice() {
+
+  if (listening) return;
+
+  const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    $('status').textContent =
+      'Trình duyệt không hỗ trợ nhận diện giọng nói.';
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+
+  recognition.lang = 'vi-VN';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = function() {
+    $('mic').classList.add('listening');
+    $('status').textContent = 'Đang lắng nghe...';
+  };
+
+  recognition.onresult = function(event) {
+
+    const text =
+      event.results[0][0].transcript.trim();
+
+    $('transcript').value = text;
+    $('status').textContent =
+      'Đã nhận diện giọng nói!';
+  };
+
+  recognition.onerror = function(event) {
+    listening = false;
+    $('mic').classList.remove('listening');
+    $('status').textContent =
+      'Lỗi micro: ' + event.error;
+  };
+
+  recognition.onend = function() {
+
+    listening = false;
+    $('mic').classList.remove('listening');
+
+  };
+
+  try {
+    listening = true;
+    recognition.start();
+  } catch (error) {
+    listening = false;
+    $('status').textContent = error.message;
+  }
+
+}
+
+function stopVoice() {
+
+  if (recognition && listening) {
+    recognition.stop();
+  }
+
+}
+
+function sendResult() {
+
+  const text = $('transcript').value.trim();
+
+  if (!text) {
+    alert('Chưa có nội dung giọng nói.');
+    return;
+  }
+
+  const validOrigin =
+    /^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/i
+      .test(parentOrigin || '') ||
+    parentOrigin === 'https://script.google.com';
+
+  if (!window.opener || !validOrigin || !nonce) {
+
+    $('status').textContent =
+      'Hãy mở trợ lý từ web kế toán. ' +
+      'Em cũng có thể sao chép nội dung thủ công.';
+
+    return;
+  }
+
+  window.opener.postMessage({
+    type: 'S1A_VOICE_RESULT',
+    text: text,
+    nonce: nonce
+  }, parentOrigin);
+
+  $('status').textContent =
+    'Đã gửi nội dung về sổ kế toán.';
+
+  window.close();
+
+}
+
+</script>
+
+</body>
+</html>
